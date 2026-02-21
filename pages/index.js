@@ -54,7 +54,7 @@ export default function Home() {
             // Google Meet-like preferences
             turnOnMicrophoneWhenJoining: true,
             turnOnCameraWhenJoining: false, // User requested OFF
-            showMyCameraToggleButton: true,
+            showMyCameraToggleButton: false,
             showMyMicrophoneToggleButton: true,
             showAudioVideoSettingsButton: true,
             showScreenSharingButton: true,
