@@ -1,76 +1,19 @@
 import Head from "next/head";
 import { useEffect, useRef } from "react";
 import config from "../lib/config";
-import { randomID, getUrlParams, getRandomName } from "../lib/util";
+import { randomID, getUrlParams } from "../lib/util";
 
 export default function Home() {
   const root = useRef();
 
   useEffect(() => {
-    if (root) {
-      const userID = randomID(5);
+    if (root.current) {
+      const roomID = getUrlParams().get("roomID") || (Math.floor(Math.random() * 10000) + "");
+      const userID = Math.floor(Math.random() * 10000) + "";
+      const userName = "User " + userID;
       const appID = config.appID;
-      let UIKitsConfig =
-        JSON.parse(
-          config.UIKitsConfig.replaceAll("\n", "")
-            .replaceAll("\t", "")
-            .replaceAll(/(\w+):/gi, '"$1":')
-            .replaceAll(/,\s+\}/gi, "}")
-        ) || {};
-      const roomID = getUrlParams().get("roomID") || randomID(5);
-      let role = getUrlParams().get("role") || "Host";
-      let sharedLinks = [];
-      if (UIKitsConfig && UIKitsConfig.scenario && UIKitsConfig.scenario.mode) {
-        if (UIKitsConfig.scenario.mode === "OneONoneCall") {
-          sharedLinks.push({
-            name: "Personal link",
-            url:
-              window.location.origin +
-              window.location.pathname +
-              "?roomID=" +
-              roomID,
-          });
-        } else if (UIKitsConfig.scenario.mode === "LiveStreaming") {
-          UIKitsConfig.scenario.config.role = role;
-          if (role === "Cohost" || role === "Host") {
-            sharedLinks.push({
-              name: "Join as co-host",
-              url:
-                window.location.origin +
-                window.location.pathname +
-                "?roomID=" +
-                roomID +
-                "&role=Cohost",
-            });
-          } else {
-            UIKitsConfig = {
-              scenario: UIKitsConfig.scenario,
-            };
-          }
-          sharedLinks.push({
-            name: "Join as audience",
-            url:
-              window.location.origin +
-              window.location.pathname +
-              "?roomID=" +
-              roomID +
-              "&role=Audience",
-          });
-        } else if (
-          UIKitsConfig.scenario.mode === "VideoConference" ||
-          UIKitsConfig.scenario.mode === "GroupCall"
-        ) {
-          sharedLinks.push({
-            name: "Personal link",
-            url:
-              window.location.origin +
-              window.location.pathname +
-              "?roomID=" +
-              roomID,
-          });
-        }
-      }
 
+      // Fetch token securely
       fetch("./api/token", {
         method: "post",
         body: JSON.stringify({
@@ -86,55 +29,93 @@ export default function Home() {
           const { ZegoUIKitPrebuilt } = await import(
             "@zegocloud/zego-uikit-prebuilt"
           );
+
           const kitToken = ZegoUIKitPrebuilt.generateKitTokenForProduction(
             appID,
             token,
             roomID,
             userID,
-            getRandomName()
+            userName
           );
+
           const zp = ZegoUIKitPrebuilt.create(kitToken);
           zp.joinRoom({
             container: root.current,
-            sharedLinks,
-            ...UIKitsConfig,
+            sharedLinks: [
+              {
+                name: 'Personal link',
+                url: window.location.protocol + '//' + window.location.host + window.location.pathname + '?roomID=' + roomID,
+              },
+            ],
+            scenario: {
+              mode: ZegoUIKitPrebuilt.VideoConference,
+            },
+
+            // Google Meet-like preferences
+            turnOnMicrophoneWhenJoining: true,
+            turnOnCameraWhenJoining: false, // User requested OFF
+            showMyCameraToggleButton: true,
+            showMyMicrophoneToggleButton: true,
+            showAudioVideoSettingsButton: true,
+            showScreenSharingButton: true,
+            showTextChat: true,
+            showUserList: true,
+            maxUsers: 50,
+            layout: "Grid",
+            showLayoutButton: true,
+            showPreJoinView: true, // Meet has a "lobby"
+            branding: {
+                logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Google_Meet_icon_%282020%29.svg/1024px-Google_Meet_icon_%282020%29.svg.png",
+            },
           });
+        })
+        .catch(err => {
+            console.error("Failed to join room:", err);
         });
     }
   }, []);
 
   return (
-    <div className="container">
+    <div className="meet-container">
       <Head>
-        <title>Create VideoCall By ZEGOCLOUD UIKits</title>
+        <title>Google Meet Clone</title>
         <link rel="icon" href="/favicon.ico" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
       </Head>
 
       <main>
-        <div className="videoContainer" ref={root}></div>
+        <div className="video-wrapper" ref={root}></div>
       </main>
+
       <style jsx>{`
-        .container {
-          min-height: 100vh;
-          padding: 0;
+        .meet-container {
+          width: 100vw;
+          height: 100vh;
+          /* Use 100dvh for mobile browsers to account for address bar */
+          height: 100dvh;
+          background-color: #202124; /* Google Meet Dark Theme Background */
+          color: white;
+          overflow: hidden;
           display: flex;
           flex-direction: column;
-          justify-content: center;
-          align-items: center;
         }
 
         main {
-          padding: 0;
           flex: 1;
           display: flex;
-          flex-direction: column;
           justify-content: center;
           align-items: center;
+          width: 100%;
+          height: 100%;
         }
-        .videoContainer {
-          width: 100vw;
-          height: 100vh;
+
+        .video-wrapper {
+          width: 100%;
+          height: 100%;
+          /* Ensure Zego container fills the wrapper */
         }
+
+        /* Adjust global styles for cleaner look */
       `}</style>
 
       <style jsx global>{`
@@ -142,13 +123,22 @@ export default function Home() {
         body {
           padding: 0;
           margin: 0;
-          font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto,
-            Oxygen, Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue,
-            sans-serif;
+          font-family: 'Google Sans', Roboto, Arial, sans-serif; /* Try to use Google fonts if available, fallbacks otherwise */
+          background-color: #202124;
         }
 
         * {
           box-sizing: border-box;
+        }
+
+        /* Custom scrollbar if needed */
+        ::-webkit-scrollbar {
+          width: 8px;
+          background-color: #202124;
+        }
+        ::-webkit-scrollbar-thumb {
+          background-color: #5f6368;
+          border-radius: 4px;
         }
       `}</style>
     </div>
