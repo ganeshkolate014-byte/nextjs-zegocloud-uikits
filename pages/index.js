@@ -1,76 +1,21 @@
 import Head from "next/head";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import config from "../lib/config";
 import { randomID, getUrlParams, getRandomName } from "../lib/util";
 
 export default function Home() {
   const root = useRef();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (root) {
-      const userID = randomID(5);
+      const roomID = getUrlParams().get("roomID") || (Math.floor(Math.random() * 10000) + "");
+      const userID = Math.floor(Math.random() * 10000) + "";
+      const userName = "userName" + userID;
+      // Use config from env
       const appID = config.appID;
-      let UIKitsConfig =
-        JSON.parse(
-          (config.UIKitsConfig || "").replaceAll("\n", "")
-            .replaceAll("\t", "")
-            .replaceAll(/(\w+):/gi, '"$1":')
-            .replaceAll(/,\s+\}/gi, "}")
-        ) || {};
-      const roomID = getUrlParams().get("roomID") || randomID(5);
-      let role = getUrlParams().get("role") || "Host";
-      let sharedLinks = [];
-      if (UIKitsConfig && UIKitsConfig.scenario && UIKitsConfig.scenario.mode) {
-        if (UIKitsConfig.scenario.mode === "OneONoneCall") {
-          sharedLinks.push({
-            name: "Personal link",
-            url:
-              window.location.origin +
-              window.location.pathname +
-              "?roomID=" +
-              roomID,
-          });
-        } else if (UIKitsConfig.scenario.mode === "LiveStreaming") {
-          UIKitsConfig.scenario.config.role = role;
-          if (role === "Cohost" || role === "Host") {
-            sharedLinks.push({
-              name: "Join as co-host",
-              url:
-                window.location.origin +
-                window.location.pathname +
-                "?roomID=" +
-                roomID +
-                "&role=Cohost",
-            });
-          } else {
-            UIKitsConfig = {
-              scenario: UIKitsConfig.scenario,
-            };
-          }
-          sharedLinks.push({
-            name: "Join as audience",
-            url:
-              window.location.origin +
-              window.location.pathname +
-              "?roomID=" +
-              roomID +
-              "&role=Audience",
-          });
-        } else if (
-          UIKitsConfig.scenario.mode === "VideoConference" ||
-          UIKitsConfig.scenario.mode === "GroupCall"
-        ) {
-          sharedLinks.push({
-            name: "Personal link",
-            url:
-              window.location.origin +
-              window.location.pathname +
-              "?roomID=" +
-              roomID,
-          });
-        }
-      }
 
+      // Fetch token from secure backend
       fetch("./api/token", {
         method: "post",
         body: JSON.stringify({
@@ -86,28 +31,58 @@ export default function Home() {
           const { ZegoUIKitPrebuilt } = await import(
             "@zegocloud/zego-uikit-prebuilt"
           );
+
           const kitToken = ZegoUIKitPrebuilt.generateKitTokenForProduction(
             appID,
             token,
             roomID,
             userID,
-            getRandomName()
+            userName
           );
+
           const zp = ZegoUIKitPrebuilt.create(kitToken);
           zp.joinRoom({
             container: root.current,
-            sharedLinks,
-            ...UIKitsConfig,
+            sharedLinks: [
+              {
+                name: 'Personal link',
+                url: window.location.protocol + '//' + window.location.host + window.location.pathname + '?roomID=' + roomID,
+              },
+            ],
+            scenario: {
+              mode: ZegoUIKitPrebuilt.VideoConference,
+            },
+
+            // Apply requested configuration
+            turnOnMicrophoneWhenJoining: true,
+            turnOnCameraWhenJoining: false, // Requested to be OFF
+            showMyCameraToggleButton: false, // Requested to be OFF
+            showMyMicrophoneToggleButton: true,
+            showAudioVideoSettingsButton: true,
+            showScreenSharingButton: true,
+            showTextChat: true,
+            showUserList: true,
+            maxUsers: 50,
+            layout: "Grid",
+            showLayoutButton: true,
           });
+        })
+        .catch(err => {
+            console.error("Failed to fetch token:", err);
         });
     }
   }, []);
 
+  const toggleMobileMenu = () => {
+    setMobileMenuOpen(!mobileMenuOpen);
+  };
+
   return (
-    <div className="app-container">
+    <div className={`app-container ${mobileMenuOpen ? 'menu-open' : ''}`}>
       <Head>
         <title>Discord Clone - ZEGOCLOUD</title>
         <link rel="icon" href="/favicon.ico" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
       </Head>
 
       <div className="server-sidebar">
@@ -142,6 +117,9 @@ export default function Home() {
 
       <div className="main-content">
         <div className="top-bar">
+          <div className="hamburger" onClick={toggleMobileMenu}>
+             ☰
+          </div>
           <div className="channel-title">
             <span className="hashtag">#</span> general
           </div>
@@ -318,6 +296,17 @@ export default function Home() {
           justify-content: space-between;
           box-shadow: 0 1px 0 rgba(4,4,5,0.2);
           background-color: #36393f;
+          position: relative;
+          z-index: 10;
+        }
+
+        .hamburger {
+           display: none;
+           font-size: 24px;
+           margin-right: 16px;
+           cursor: pointer;
+           user-select: none;
+           z-index: 20;
         }
 
         .channel-title {
@@ -369,6 +358,38 @@ export default function Home() {
           width: 100%;
           height: 100%;
           flex: 1;
+        }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+           .server-sidebar, .channel-sidebar {
+              display: none;
+           }
+
+           .app-container.menu-open .server-sidebar,
+           .app-container.menu-open .channel-sidebar {
+              display: flex;
+              position: absolute;
+              height: 100%;
+              z-index: 100;
+           }
+
+           .app-container.menu-open .channel-sidebar {
+              left: 72px;
+              box-shadow: 2px 0 5px rgba(0,0,0,0.5);
+           }
+
+           .hamburger {
+              display: block;
+           }
+
+           .search-bar {
+              display: none;
+           }
+
+           .top-icons span:not(:last-child) {
+              display: none; /* Hide most icons on mobile */
+           }
         }
       `}</style>
 
